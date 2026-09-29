@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router({ mergeParams: true });
 const {
   getReservationsByCatway,
-  getReservationById,
+  getReservationDetails,
   createReservation,
   deleteReservation
 } = require('../controllers/reservationController');
@@ -15,7 +15,7 @@ router.route('/')
   .post(createReservation);
 
 router.route('/:idReservation')
-  .get(getReservationById)
+  .get(getReservationDetails)
   .delete(deleteReservation);
 
 module.exports = router;
