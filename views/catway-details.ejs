@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Port Russell - Détails Catway #<%= catwayId %></title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="dashboard-body">
+  <header class="navbar">
+    <div class="brand">Port Russell</div>
+    <div class="user-menu">
+      <a href="/dashboard" class="nav-link">← Retour au tableau de bord</a>
+      <button id="logoutBtn" class="btn-logout">Déconnexion</button>
+    </div>
+  </header>
+
+  <main class="dashboard-content">
+    <!-- Fiche info du Catway -->
+    <section class="card">
+      <div class="section-header">
+        <h2>Catway #<span id="catway-num"><%= catwayId %></span></h2>
+        <span class="badge" id="catway-type">Chargement...</span>
+      </div>
+
+      <div class="details-grid">
+        <div>
+          <span class="label">État actuel :</span>
+          <span id="catway-state-text" class="value-highlight">Chargement...</span>
+        </div>
+      </div>
+
+      <!-- Formulaire pour modifier l'état -->
+      <form id="updateCatwayForm" class="inline-form">
+        <div class="form-group flex-1">
+          <label for="catwayState">Modifier la description de l'état</label>
+          <input type="text" id="catwayState" name="catwayState" required placeholder="Ex: bon état, latte cassée...">
+        </div>
+        <button type="submit" class="btn-primary btn-inline">Mettre à jour l'état</button>
+      </form>
+      <div id="catway-msg" class="info-msg" style="display: none;"></div>
+    </section>
+
+    <!-- Section Réservations -->
+    <section class="card">
+      <div class="section-header">
+        <h2>Réservations associées</h2>
+        <span class="badge" id="res-count">0 réservations</span>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Bateau</th>
+              <th>Date de début</th>
+              <th>Date de fin</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="reservations-table-body">
+            <tr>
+              <td colspan="5" class="text-center">Chargement des réservations...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Formulaire pour ajouter une réservation -->
+      <div class="add-section">
+        <h3>Enregistrer une nouvelle réservation</h3>
+        <form id="addReservationForm" class="grid-form">
+          <div class="form-group">
+            <label for="clientName">Nom du client</label>
+            <input type="text" id="clientName" required placeholder="Ex: Jean Dupont">
+          </div>
+          <div class="form-group">
+            <label for="boatName">Nom du bateau</label>
+            <input type="text" id="boatName" required placeholder="Ex: Black Pearl">
+          </div>
+          <div class="form-group">
+            <label for="checkIn">Date de début</label>
+            <input type="date" id="checkIn" required>
+          </div>
+          <div class="form-group">
+            <label for="checkOut">Date de fin</label>
+            <input type="date" id="checkOut" required>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Réserver ce catway</button>
+          </div>
+        </form>
+        <div id="res-msg" class="info-msg" style="display: none;"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const catwayId = "<%= catwayId %>";
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      window.location.href = '/';
+    }
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      localStorage.removeItem('token');
+      window.location.href = '/';
+    });
+
+    // 1. Charger les détails du catway
+    async function loadCatway() {
+      try {
+        const res = await fetch(`/api/catways/${catwayId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error();
+        const catway = await res.json();
+        
+        document.getElementById('catway-type').textContent = `Type : ${catway.type}`;
+        document.getElementById('catway-state-text').textContent = catway.catwayState;
+        document.getElementById('catwayState').value = catway.catwayState;
+      } catch (err) {
+        document.getElementById('catway-state-text').textContent = 'Erreur de chargement';
+      }
+    }
+
+    // 2. Modifier l'état du catway
+    document.getElementById('updateCatwayForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const catwayState = document.getElementById('catwayState').value;
+      const msgBox = document.getElementById('catway-msg');
+
+      try {
+        const res = await fetch(`/api/catways/${catwayId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ catwayState })
+        });
+
+        if (res.ok) {
+          msgBox.textContent = 'État mis à jour avec succès !';
+          msgBox.className = 'info-msg success';
+          msgBox.style.display = 'block';
+          loadCatway();
+        } else {
+          throw new Error();
+        }
+      } catch (err) {
+        msgBox.textContent = 'Erreur lors de la mise à jour';
+        msgBox.className = 'info-msg error';
+        msgBox.style.display = 'block';
+      }
+    });
+
+    // 3. Charger les réservations du catway
+    async function loadReservations() {
+      const tbody = document.getElementById('reservations-table-body');
+      const countBadge = document.getElementById('res-count');
+
+      try {
+        const res = await fetch(`/api/catways/${catwayId}/reservations`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error();
+        const reservations = await res.json();
+
+        tbody.innerHTML = '';
+        countBadge.textContent = `${reservations.length} réservation(s)`;
+
+        if (reservations.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" class="text-center">Aucune réservation pour ce ponton</td></tr>';
+          return;
+        }
+
+        reservations.forEach(r => {
+          const tr = document.createElement('tr');
+          const rawIn = r.startDate || r.checkIn;
+const rawOut = r.endDate || r.checkOut;
+
+const dIn = (!isNaN(new Date(rawIn))) ? new Date(rawIn).toLocaleDateString('fr-FR') : (rawIn || 'N/A');
+const dOut = (!isNaN(new Date(rawOut))) ? new Date(rawOut).toLocaleDateString('fr-FR') : (rawOut || 'N/A');
+
+          tr.innerHTML = `
+            <td><strong>${r.clientName}</strong></td>
+            <td>${r.boatName}</td>
+            <td>${dIn}</td>
+            <td>${dOut}</td>
+            <td>
+              <button onclick="deleteReservation('${r._id}')" class="btn-delete">Supprimer</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center error-text">Erreur de chargement des réservations</td></tr>';
+      }
+    }
+
+    // 4. Ajouter une réservation
+    document.getElementById('addReservationForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msgBox = document.getElementById('res-msg');
+
+      const cin = document.getElementById('checkIn').value;
+      const cout = document.getElementById('checkOut').value;
+
+      const data = {
+        catwayNumber: catwayId,
+        clientName: document.getElementById('clientName').value,
+        boatName: document.getElementById('boatName').value,
+        startDate: cin,
+        endDate: cout,
+        checkIn: cin,
+        checkOut: cout
+      };;
+
+      try {
+        const res = await fetch(`/api/catways/${catwayId}/reservations`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(data)
+        });
+
+        if (res.ok) {
+          msgBox.textContent = 'Réservation ajoutée avec succès !';
+          msgBox.className = 'info-msg success';
+          msgBox.style.display = 'block';
+          document.getElementById('addReservationForm').reset();
+          loadReservations();
+        } else {
+          const errData = await res.json();
+          msgBox.textContent = errData.message || "Erreur lors de l'ajout";
+          msgBox.className = 'info-msg error';
+          msgBox.style.display = 'block';
+        }
+      } catch (err) {
+        msgBox.textContent = 'Erreur réseau';
+        msgBox.className = 'info-msg error';
+        msgBox.style.display = 'block';
+      }
+    });
+
+    // 5. Supprimer une réservation
+    async function deleteReservation(resId) {
+      if (!confirm('Confirmer la suppression de cette réservation ?')) return;
+
+      try {
+        const res = await fetch(`/api/catways/${catwayId}/reservations/${resId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (res.ok) {
+          loadReservations();
+        } else {
+          alert('Erreur lors de la suppression');
+        }
+      } catch (err) {
+        alert('Erreur réseau');
+      }
+    }
+
+    loadCatway();
+    loadReservations();
+  </script>
+</body>
+</html>

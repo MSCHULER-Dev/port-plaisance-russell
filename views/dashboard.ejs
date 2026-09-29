@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Port Russell - Tableau de bord</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="dashboard-body">
+  <header class="navbar">
+    <div class="brand">Port Russell</div>
+    <div class="user-menu">
+      <span id="user-display">Connecté</span>
+      <button id="logoutBtn" class="btn-logout">Déconnexion</button>
+    </div>
+  </header>
+
+  <main class="dashboard-content">
+    <section class="catways-section">
+      <div class="section-header">
+        <h2>Catways du port</h2>
+        <span class="badge" id="catways-count">0 pontons</span>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Numéro</th>
+              <th>Type</th>
+              <th>État</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="catways-table-body">
+            <tr>
+              <td colspan="4" class="text-center">Chargement des données...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <!-- Section Gestion des utilisateurs -->
+    <section class="card" style="margin-top: 2rem;">
+      <div class="section-header">
+        <h2>Gestion des utilisateurs</h2>
+        <span class="badge" id="users-count">0 utilisateurs</span>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Nom d'utilisateur</th>
+              <th>Email</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="users-table-body">
+            <tr>
+              <td colspan="3" class="text-center">Chargement des utilisateurs...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Formulaire d'ajout d'utilisateur -->
+      <div class="add-section">
+        <h3>Créer un nouvel utilisateur</h3>
+        <form id="addUserForm" class="grid-form">
+          <div class="form-group">
+            <label for="username">Nom d'utilisateur</label>
+            <input type="text" id="username" required placeholder="Ex: JeanDupont">
+          </div>
+          <div class="form-group">
+            <label for="userEmail">Adresse email</label>
+            <input type="email" id="userEmail" required placeholder="Ex: jean@russell-port.fr">
+          </div>
+          <div class="form-group">
+            <label for="userPassword">Mot de passe</label>
+            <input type="password" id="userPassword" required placeholder="Mot de passe">
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Ajouter l'utilisateur</button>
+          </div>
+        </form>
+        <div id="user-msg" class="info-msg" style="display: none;"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // Vérification du token
+    const token = localStorage.getItem('token');
+    if (!token) {
+      window.location.href = '/';
+    }
+
+    // Déconnexion
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      localStorage.removeItem('token');
+      window.location.href = '/';
+    });
+
+    // Chargement des catways
+    async function loadCatways() {
+      try {
+        const res = await fetch('/api/catways', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (res.status === 401 || res.status === 403) {
+          localStorage.removeItem('token');
+          window.location.href = '/';
+          return;
+        }
+
+        const catways = await res.json();
+        const tbody = document.getElementById('catways-table-body');
+        const countBadge = document.getElementById('catways-count');
+
+        tbody.innerHTML = '';
+        countBadge.textContent = `${catways.length} pontons`;
+
+        if (catways.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" class="text-center">Aucun catway enregistré</td></tr>';
+          return;
+        }
+
+        catways.forEach(catway => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><strong>#${catway.catwayNumber}</strong></td>
+            <td>${catway.type}</td>
+            <td><span class="status-pill">${catway.catwayState}</span></td>
+            <td>
+              <a href="/catways/${catway.catwayNumber}" class="btn-action">Détails / Réservations</a>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        document.getElementById('catways-table-body').innerHTML = 
+          '<tr><td colspan="4" class="text-center error-text">Erreur de chargement des catways</td></tr>';
+      }
+    }
+// Charger les utilisateurs
+    async function loadUsers() {
+      try {
+        const res = await fetch('/api/users', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error();
+        const users = await res.json();
+
+        const tbody = document.getElementById('users-table-body');
+        const badge = document.getElementById('users-count');
+
+        tbody.innerHTML = '';
+        badge.textContent = `${users.length} utilisateur(s)`;
+
+        if (users.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" class="text-center">Aucun utilisateur trouvé</td></tr>';
+          return;
+        }
+
+        users.forEach(u => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><strong>${u.username}</strong></td>
+            <td>${u.email}</td>
+            <td>
+              <button onclick="deleteUser('${u.email}')" class="btn-delete">Supprimer</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        document.getElementById('users-table-body').innerHTML = 
+          '<tr><td colspan="3" class="text-center error-text">Erreur de chargement des utilisateurs</td></tr>';
+      }
+    }
+
+    // Ajouter un utilisateur
+    document.getElementById('addUserForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msgBox = document.getElementById('user-msg');
+
+      const data = {
+        username: document.getElementById('username').value,
+        email: document.getElementById('userEmail').value,
+        password: document.getElementById('userPassword').value
+      };
+
+      try {
+        const res = await fetch('/api/users', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(data)
+        });
+
+        if (res.ok) {
+          msgBox.textContent = 'Utilisateur créé avec succès !';
+          msgBox.className = 'info-msg success';
+          msgBox.style.display = 'block';
+          document.getElementById('addUserForm').reset();
+          loadUsers();
+        } else {
+          const err = await res.json();
+          msgBox.textContent = err.message || "Erreur lors de l'ajout";
+          msgBox.className = 'info-msg error';
+          msgBox.style.display = 'block';
+        }
+      } catch (err) {
+        msgBox.textContent = 'Erreur réseau';
+        msgBox.className = 'info-msg error';
+        msgBox.style.display = 'block';
+      }
+    });
+
+    // Supprimer un utilisateur
+    async function deleteUser(email) {
+      if (!confirm(`Supprimer l'utilisateur ${email} ?`)) return;
+
+      try {
+        const res = await fetch(`/api/users/${email}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (res.ok) {
+          loadUsers();
+        } else {
+          alert("Erreur lors de la suppression de l'utilisateur");
+        }
+      } catch (err) {
+        alert('Erreur réseau');
+      }
+    }
+
+    loadUsers();
+    loadCatways();
+  </script>
+</body>
+</html>
